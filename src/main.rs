@@ -4,7 +4,7 @@ use std::io::{self, Write};
 fn main() {
     print!("$ ");
 
-    let command = String::new();
+    let mut command = String::new();
     io::stdin().read_line(&mut command).unwrap();
     
     //io::stdout().flush().unwrap();
