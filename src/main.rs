@@ -3,7 +3,8 @@ use std::io::{self, Write};
 
 fn main() {
     // shell은 계속 반복되어야 하니까...
-    while true {
+    // while true 하지 말고 loop를 쓰렴 더 짧으니까
+    loop {
         // 프롬프트 시작
         print!("$ ");
         io::stdout().flush().unwrap();
@@ -12,7 +13,12 @@ fn main() {
         let mut command = String::new();
         io::stdin().read_line(&mut command).unwrap();
 
-        // 처리 및 출력
-        println!("{}: command not found", command.trim());
+        let command = command.trim();
+
+        // exit 입력 시, 종료
+        match command {
+            "exit" => break,
+            _ => println!("{}: command not found", command.trim()),
+        }
     }
 }
