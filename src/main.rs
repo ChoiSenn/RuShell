@@ -63,7 +63,7 @@ fn main() {
 fn external_command(cmd: &str, args: &[&str]) {
     // 실행 가능하지 않다면 return
     if let Some(path) = find_in_path(cmd) {
-        let mut child = match ProcessCommand::new(path).args(args).spawn() {
+        let mut child = match ProcessCommand::new(path).arg0(cmd).args(args).spawn() {
             Ok(child) => child,
             Err(_) => {
                 println!("{}: command not found", cmd);
