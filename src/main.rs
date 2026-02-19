@@ -73,6 +73,21 @@ fn cd_command(args: &[&str]) {
     if let Some(dir) = args.first() {
         let path = Path::new(dir);
 
+        // cd ~이면 홈 디렉터리로 이동
+        if *dir == "~" {
+            #[cfg(unix)]
+            if let Some(path) = env::var_os("HOME") {
+                env::set_current_dir(PathBuf::from(path).as_path());
+            }
+
+            #[cfg(windows)]
+            if let Some(path) = env::var_os("USERPROFILE") {
+                env::set_current_dir(PathBuf::from(path).as_path());
+            }
+
+            return;
+        }
+
         if path.exists() && path.is_dir() {
             if let Err(e) = env::set_current_dir(path) {
                 println!("Connot set path : {}", path.display());
