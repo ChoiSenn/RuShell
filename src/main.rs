@@ -15,6 +15,7 @@ enum Command {
     Exit,
     Type,
     Echo,
+    Pwd,
 }
 
 // Command 메서드 정의
@@ -25,6 +26,7 @@ impl Command {
             "exit" => Some(Command::Exit),
             "type" => Some(Command::Type),
             "echo" => Some(Command::Echo),
+            "pwd" => Some(Command::Pwd),
             _ => None,
         }
     }
@@ -57,22 +59,31 @@ fn main() {
             Some(Command::Exit) => break,  // shell 종료
             Some(Command::Type) => type_command(&args),  // 내장 명령어/실행 파일/인식되지 않은 명령어인지 확인
             Some(Command::Echo) => echo_command(&args),  // 인자 출력
+            Some(Command::Pwd) => pwd_command(),  // 현재 디렉터리명 출력
             None => external_command(command, &args)  // 내장 명령어가 아닌 경우, 외부 프로그램 실행 및 인수 전달
         }
+    }
+}
+
+fn pwd_command() {
+    match env::current_dir() {
+        Ok(path) => println!("{}", path.display()),
+        Err(_e) => println!("Can't found path"),
     }
 }
 
 fn external_command(cmd: &str, args: &[&str]) {
     // 실행 가능하지 않다면 return
     if let Some(path) = find_in_path(cmd) {
-        let mut child = match ProcessCommand::new(path).arg0(cmd).args(args).spawn() {
-            Ok(child) => child,
+        // 프로세스 생성. arg0은 명령어(프로그램명), 인수로 나머지 인수 그대로. spawn() 이용하여 프로세스 fork. 자식 프로세스에서 exec 수행.
+        let mut child = match ProcessCommand::new(path).arg(cmd).args(args).spawn() {
+            Ok(child) => child,  // child 핸들 반환
             Err(_) => {
                 println!("{}: command not found", cmd);
                 return;
             }
         };
-        let _ = child.wait();
+        let _ = child.wait();  // 자식 프로세스 종료 대기
     } else {
         println!("{}: command not found", cmd);
     }
