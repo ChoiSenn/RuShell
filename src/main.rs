@@ -2,6 +2,7 @@
 use std::io::{self, Write};
 use std::env;
 use std::path::{Path, PathBuf};
+use std::process::Command as ProcessCommand;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -54,8 +55,24 @@ fn main() {
             Some(Command::Exit) => break,  // shell 종료
             Some(Command::Type) => type_command(&args),  // 내장 명령어/실행 파일/인식되지 않은 명령어인지 확인
             Some(Command::Echo) => echo_command(&args),  // 인자 출력
-            None => println!("{}: command not found", command.trim()),
+            None => external_command(command, &args)  // 내장 명령어가 아닌 경우, 외부 프로그램 실행 및 인수 전달
         }
+    }
+}
+
+fn external_command(cmd: &str, args: &[&str]) {
+    // 실행 가능하지 않다면 return
+    if let Some(path) = find_in_path(cmd) {
+        let mut child = match ProcessCommand::new(path).args(args).spawn() {
+            Ok(child) => child,
+            Err(_) => {
+                println!("{}: command not found", cmd);
+                return;
+            }
+        };
+        let _ = child.wait();
+    } else {
+        println!("{}: command not found", cmd);
     }
 }
 
