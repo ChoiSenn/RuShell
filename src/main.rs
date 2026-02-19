@@ -79,7 +79,7 @@ fn cd_command(args: &[&str]) {
             }
         } else {
             // 존재하지 않으면 오류 출력
-            println!("cd: {}: No such file or directory.", path.display());
+            println!("cd: {}: No such file or directory", path.display());
         }
     }
 }
