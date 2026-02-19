@@ -1,6 +1,12 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
+use std::env;
+use std::path::{Path, PathBuf};
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
+// 사용 가능한 문자열 목록
 #[derive(Debug)]
 enum Command {
     Exit,
@@ -8,7 +14,9 @@ enum Command {
     Echo,
 }
 
+// Command 메서드 정의
 impl Command {
+    // 문자열을 Command 타입으로 변환
     fn from_str(s: &str) -> Option<Self> {
         match s {
             "exit" => Some(Command::Exit),
@@ -53,8 +61,11 @@ fn main() {
 
 fn type_command(args: &[&str]) {
     if let Some(cmd) = args.first() {
+        // 내장 명령일 경우, 보고하고 중지
         if Command::from_str(cmd).is_some() {
             println!("{} is a shell builtin", cmd);
+        } else if let Some(path) = find_in_path(cmd) {  // 내장 명령어가 아닌 경우, PATH에 있는 모든 디렉터리를 순회
+            println!("{} is {}", cmd, path.display());
         } else {
             println!("{}: not found", cmd);
         }
@@ -63,4 +74,46 @@ fn type_command(args: &[&str]) {
 
 fn echo_command(args: &[&str]) {
     println!("{}", args.join(" "));
+}
+
+fn find_in_path(cmd:&str) -> Option<PathBuf> {
+    let path = Path::new(cmd);
+    // 절대/상대 경로 직접 호출
+    if path.is_absolute() || cmd.contains('/') {
+        if is_executable(path) {
+            return Some(path.to_path_buf());
+        }
+        return None;
+    }
+    // PATH 환경변수 검색
+    if let Some(path_var) = env::var_os("PATH") {
+        for dir in env::split_paths(&path_var) {
+            let full_path = dir.join(cmd);
+            if is_executable(&full_path) {
+                return Some(full_path);
+            }
+        }
+    }
+    None
+}
+
+fn is_executable(path:&Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+
+    #[cfg(unix)]
+    {
+        if let Ok(metadata) = path.metadata() {
+        let mode = metadata.permissions().mode();
+        return mode & 0o111 != 0;
+        }
+        false
+    }
+
+    #[cfg(windows)]
+    {
+        // Windows는 실행 비트 개념 X
+        return true;
+    }
 }
