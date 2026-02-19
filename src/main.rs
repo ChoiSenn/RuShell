@@ -6,6 +6,8 @@ use std::process::Command as ProcessCommand;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
 
 // 사용 가능한 문자열 목록
 #[derive(Debug)]
