@@ -64,7 +64,7 @@ fn type_command(args: &[&str]) {
         // 내장 명령일 경우, 보고하고 중지
         if Command::from_str(cmd).is_some() {
             println!("{} is a shell builtin", cmd);
-        } else if let Some(path) = find_in_path(cmd) {  // 내장 명령어가 아닌 경우, PATH에 있는 모든 디렉터리를 순회
+        } else if let Some(path) = find_in_path(cmd) {  // 내장 명령어가 아닌 경우, PATH를 참조하여 파일 전체 경로 반환
             println!("{} is {}", cmd, path.display());
         } else {
             println!("{}: not found", cmd);
@@ -78,7 +78,7 @@ fn echo_command(args: &[&str]) {
 
 fn find_in_path(cmd:&str) -> Option<PathBuf> {
     let path = Path::new(cmd);
-    // 절대/상대 경로 직접 호출
+    // 경로 직접 호출 (/ 포함 시, PATH를 보지 않음)
     if path.is_absolute() || cmd.contains('/') {
         if is_executable(path) {
             return Some(path.to_path_buf());
