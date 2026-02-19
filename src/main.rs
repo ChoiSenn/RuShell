@@ -75,8 +75,11 @@ fn cd_command(args: &[&str]) {
 
         if path.exists() && path.is_dir() {
             if let Err(e) = env::set_current_dir(path) {
-                println!("cd: {}: No such file or directory.", path.display());
+                println!("Connot set path : {}", path.display());
             }
+        } else {
+            // 존재하지 않으면 오류 출력
+            println!("cd: {}: No such file or directory.", path.display());
         }
     }
 }
