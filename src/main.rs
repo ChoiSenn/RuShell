@@ -75,14 +75,16 @@ fn cd_command(args: &[&str]) {
 
         // cd ~이면 홈 디렉터리로 이동
         if *dir == "~" {
-            #[cfg(unix)]
-            if let Some(path) = env::var_os("HOME") {
-                env::set_current_dir(PathBuf::from(path).as_path());
-            }
+            let home_path = if cfg!(unix) {
+                env::var_os("HOME")
+            } else {
+                env::var_os("USERPROFILE")
+            };
 
-            #[cfg(windows)]
-            if let Some(path) = env::var_os("USERPROFILE") {
-                env::set_current_dir(PathBuf::from(path).as_path());
+            if let Some(home_path) = home_path {
+                if let Err(e) = env::set_current_dir(&home_path) {
+                    println!("cd: {}", e);
+                }
             }
 
             return;
