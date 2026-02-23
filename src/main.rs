@@ -34,6 +34,32 @@ impl Command {
     }
 }
 
+fn parse_args(input: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut in_single_quote = false;
+
+    for c in input.chars() {
+        match c {
+            '\'' => {
+                in_single_quote = !in_single_quote;
+            }
+            ' ' if !in_single_quote => {
+                if !current.is_empty() {
+                    args.push(current.clone());
+                    current.clear();
+                }
+            }
+            _ => current.push(c),
+        }
+    }
+
+    if !current.is_empty() {
+        args.push(current);
+    }
+    args
+}
+
 fn main() {
     // shell은 계속 반복되어야 하니까...
     // while true 하지 말고 loop를 쓰렴 더 짧으니까
@@ -52,9 +78,14 @@ fn main() {
         }
 
         // 입력 값을 공백 기준으로 분해하여 &str 슬라이스 벡터 생성
-        let mut input_command = input.split_whitespace();
-        let command = input_command.next().unwrap();
-        let args: Vec<&str> = input_command.collect();
+        let tokens = parse_args(input);
+
+        if tokens.is_empty() {
+            continue;
+        }
+
+        let command = &tokens[0];
+        let args: Vec<&str> = tokens[1..].iter().map(|s| s.as_str()).collect();
 
         // 입력 명령어에 따른 동작
         match Command::from_str(command) {
