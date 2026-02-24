@@ -41,50 +41,63 @@ fn parse_args(input: &str) -> Vec<String> {
         Normal,
         InSingleQuote,
         InDoubleQuote,
-        Backslash,
     }
 
     let mut args = Vec::new();
     let mut current = String::new();
     let mut state = State::Normal;
+    let mut escaped = false;
 
     for c in input.chars() {  // 문자 단위로 순회
+        // escape 처리
+        if escaped {
+            match state {
+                // 기본 상태일때는 모든 문자 escape
+                State::Normal => current.push(c),
+                // " 안에서는 특정 문자만 escape
+                State::InDoubleQuote => {
+                    match c {
+                        '"' | '\\' => current.push(c),
+                        _ => {
+                            current.push('\\');
+                            current.push(c);
+                        }
+                    }
+                }
+                State::InSingleQuote => current.push(c),
+            }
+            escaped = false;
+            continue;
+        }
+
         match state {  // 현 상태에 따라 다르게 처리
             // 기본 상태일때는 (', " 등에 둘러싸여있지 않을 때)
             State::Normal => match c {
                 '\'' => state = State::InSingleQuote,  // '가 입력되면 InSingleQuote 상태로
                 '"' => state = State::InDoubleQuote,  // "가 입력되면 InDoubleQuote 상태로
-                '\\' => state = State::Backslash,  // \가 입력되면 Backslash 상태로
+                '\\' => escaped = true,
                 ' ' => {  // 공백 입력 시, 토큰 종료. current를 args에 push
                     if !current.is_empty() {
                         args.push(std::mem::take(&mut current));
                     }
                 }
-                _ => current.push(c),  // 그 이외의 문자를 current에 모음
+                _ => current.push(c),
             },
 
             // '에 둘러싸여있는 상태일때는
             State::InSingleQuote => {
                 if c == '\'' {  // '가 입력되면 닫혀지므로 Normal 상태로
-                    state = State::Normal;
+                    state = State::Normal
                 } else {  // 이외에는 current에 문자를 모음
                     current.push(c);
                 }
             },
 
             // "에 둘러싸여있는 상태 동일
-            State::InDoubleQuote => {
-                if c == '"' {
-                    state = State::Normal;
-                } else {
-                    current.push(c);
-                }
-            },
-
-            // 역슬래시가 존재하면 뒤의 문자에 대해 이스케이프 처리
-            State::Backslash => {
-                current.push(c);
-                state = State::Normal;  // 뒤의 한 문자만 처리하고 상태 되돌림
+            State::InDoubleQuote => match c {
+                '"' => state = State::Normal,
+                '\\' => escaped = true,
+                _ => current.push(c),
             },
         }
     }
