@@ -54,6 +54,7 @@ fn parse_args(input: &str) -> Vec<String> {
             State::Normal => match c {
                 '\'' => state = State::InSingleQuote,  // '가 입력되면 InSingleQuote 상태로
                 '"' => state = State::InDoubleQuote,  // "가 입력되면 InDoubleQuote 상태로
+                '\\' => state = State::Backslash,  // \가 입력되면 Backslash 상태로
                 ' ' => {  // 공백 입력 시, 토큰 종료. current를 args에 push
                     if !current.is_empty() {
                         args.push(std::mem::take(&mut current));
