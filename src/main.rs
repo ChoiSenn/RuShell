@@ -35,25 +35,48 @@ impl Command {
 }
 
 fn parse_args(input: &str) -> Vec<String> {
-    let mut args = Vec::new();
-    let mut current = String::new();
-    let mut in_single_quote = false;
-
-    for c in input.chars() {
-        match c {
-            '\'' => {
-                in_single_quote = !in_single_quote;
-            }
-            ' ' if !in_single_quote => {
-                if !current.is_empty() {
-                    args.push(current.clone());
-                    current.clear();
-                }
-            }
-            _ => current.push(c),
-        }
+    #[derive(PartialEq)]
+    enum State {
+        Normal,
+        InSingleQuote,
+        InDoubleQuote,
     }
 
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut state = State::Normal;
+
+    for c in input.chars() {  // 문자 단위로 순회
+        match state {
+            State::Normal => match c {
+                '\'' => state = State::InSingleQuote,
+                '"' => state = State::InDoubleQuote,
+                ' ' => {
+                    if !current.is_empty() {
+                        args.push(std::mem::take(&mut current));
+                    }
+                }
+                _ => current.push(c),
+            },
+
+            State::InSingleQuote => {
+                if c == '\'' {
+                    state = State::Normal;
+                } else {
+                    current.push(c);
+                }
+            }
+
+            State::InDoubleQuote => {
+                if c == '"' {
+                    state = State::Normal;
+                } else {
+                    current.push(c);
+                }
+            }
+        }
+    }
+    // 모은 문자열 push
     if !current.is_empty() {
         args.push(current);
     }
