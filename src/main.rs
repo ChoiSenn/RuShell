@@ -19,6 +19,7 @@ struct ExecContext {
 }
 
 // 리다이렉트 대상 파일
+#[derive(Clone)]
 struct Redirect {
     file: String,
 }
@@ -203,7 +204,7 @@ fn main() {
         let args: Vec<&str> = tokens[1..].iter().map(|s| s.as_str()).collect();
 
         // context 생성
-        let mut ctx = build_context(redirect);
+        let mut ctx = build_context(redirect.clone());
 
         // 입력 명령어에 따른 동작
         match Command::from_str(command) {
@@ -286,10 +287,6 @@ fn external_command(cmd: &str, args: &[&str], redirect: Option<Redirect>) {
                 return;
             }
         };
-
-        if let Some(mut child_stdout) = child.stdout.take() {
-            std::io::copy(&mut child_stdout, &mut ctx.stdout).unwrap();
-        }
 
         let _ = child.wait();  // 자식 프로세스 종료 대기
     } else {
