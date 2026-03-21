@@ -6,6 +6,7 @@ use std::process::Command as ProcessCommand;
 use std::fs::File;
 use std::io::{stdout, stderr};
 use std::process::Stdio;
+use std::fs::OpenOptions;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -21,8 +22,8 @@ struct ExecContext {
 // 리다이렉트 대상 파일
 #[derive(Clone)]
 struct Redirect {
-    stdout: Option<String>,
-    stderr: Option<String>,
+    stdout: Option<(String, bool)>,
+    stderr: Option<(String, bool)>,
 }
 
 // 사용 가능한 문자열 목록
@@ -67,7 +68,18 @@ fn extract_redirect(tokens: Vec<String>) -> (Vec<String>, Option<Redirect>) {
             // stdout 리다이렉트 처리 
             ">" | "1>" => {  
                 if i + 1 < tokens.len() {  // 다음 토큰에서 파일명 확인
-                    redirect.stdout = Some(tokens[i + 1].clone());
+                    redirect.stdout = Some((tokens[i + 1].clone(), false));
+                    has_redirect = true;
+                    i += 2;
+                } else {
+                    eprintln!("syntax error: no file after >");
+                    break;
+                }
+            }
+            // 표준 출력 처리 
+            ">>" | "1>>" => {  
+                if i + 1 < tokens.len() {
+                    redirect.stdout = Some((tokens[i + 1].clone(), true));
                     has_redirect = true;
                     i += 2;
                 } else {
@@ -78,7 +90,7 @@ fn extract_redirect(tokens: Vec<String>) -> (Vec<String>, Option<Redirect>) {
             // 표준 오류 처리
             "2>" => {
                 if i + 1 < tokens.len() {
-                    redirect.stderr = Some(tokens[i + 1].clone());
+                    redirect.stderr = Some((tokens[i + 1].clone(), false));
                     has_redirect = true;
                     i += 2;
                 } else {
@@ -108,11 +120,21 @@ fn build_context(redirect: Option<Redirect>) -> ExecContext {
     let mut stderr: Box<dyn Write> = Box::new(stderr());
 
     if let Some(r) = redirect {
-        if let Some(file) = r.stdout {
-            stdout = Box::new(File::create(file).unwrap());
+        if let Some((file, append)) = r.stdout {
+            let f = if append {
+                OpenOptions::new().create(true).append(true).open(file).unwrap()
+            } else {
+                File::create(file).unwrap()
+            };
+            stdout = Box::new(f);
         }
-        if let Some(file) = r.stderr {
-            stderr = Box::new(File::create(file).unwrap());
+        if let Some((file, append)) = r.stderr {
+            let f = if append {
+                OpenOptions::new().create(true).append(true).open(file).unwrap()
+            } else {
+                File::create(file).unwrap()
+            };
+            stderr = Box::new(f);
         }
     }
 
@@ -290,11 +312,21 @@ fn external_command(cmd: &str, args: &[&str], redirect: Option<Redirect>) {
 
         // stdout / stderr 연결
         if let Some(r) = redirect {
-            if let Some(file) = r.stdout {
-                command.stdout(Stdio::from(File::create(file).unwrap()));
+            if let Some((file, append)) = r.stdout {
+                let f = if append {
+                    OpenOptions::new().create(true).append(true).open(file).unwrap()
+                } else {
+                    File::create(file).unwrap()
+                };
+                command.stdout(Stdio::from(f));
             }
-            if let Some(file) = r.stderr {
-                command.stderr(Stdio::from(File::create(file).unwrap()));
+            if let Some((file, append)) = r.stderr {
+                let f = if append {
+                    OpenOptions::new().create(true).append(true).open(file).unwrap()
+                } else {
+                    File::create(file).unwrap()
+                };
+                command.stderr(Stdio::from(f));
             }
         }
 
