@@ -4,7 +4,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 use std::fs::File;
-use std::io::{Write, stdout, stderr};
+use std::io::{stdout, stderr};
 use std::process::Stdio;
 
 #[cfg(unix)]
@@ -50,7 +50,7 @@ impl Command {
 
 // 인자 및 리다이렉션 분리
 fn extract_redirect(tokens: Vec<String>) -> (Vec<String>, Option<Redirect>) {
-    let mut args = Vec:new();
+    let mut args = Vec::new();
     let mut redirect = None;
 
     let mut i = 0;
@@ -90,7 +90,7 @@ fn build_context(redirect: Option<Redirect>) -> ExecContext {
 
     ExecContext {
         stdout,
-        stedrr: Box::new(stderr()),
+        stderr: Box::new(stderr()),
     }
 }
 
@@ -210,7 +210,7 @@ fn main() {
             Some(Command::Exit) => break,  // shell 종료
             Some(Command::Type) => type_command(&args, &mut ctx),  // 내장 명령어/실행 파일/인식되지 않은 명령어인지 확인
             Some(Command::Echo) => echo_command(&args, &mut ctx),  // 인자 출력
-            Some(Command::Pwd) => pwd_command(, &mut ctx),  // 현재 디렉터리명 출력
+            Some(Command::Pwd) => pwd_command(&mut ctx),  // 현재 디렉터리명 출력
             Some(Command::Cd) => cd_command(&args),  // 현재 디렉터리 이동
             None => external_command(command, &args, &mut ctx)  // 내장 명령어가 아닌 경우, 외부 프로그램 실행 및 인수 전달
         }
@@ -260,7 +260,7 @@ fn pwd_command(ctx: &mut ExecContext) {
 fn external_command(cmd: &str, args: &[&str], ctx: &mut ExecContext) {
     // 실행 가능하지 않다면 return
     if let Some(path) = find_in_path(cmd) {
-        let mut command = ProcessCommand::new(path);
+        let mut command = ProcessCommand::new(&path);
         command.args(args);
 
         // stdout 연결
@@ -283,6 +283,11 @@ fn external_command(cmd: &str, args: &[&str], ctx: &mut ExecContext) {
                 return;
             }
         };
+
+        if let Some(mut child_stdout) = child.stdout.take() {
+            std::io::copy(&mut child_stdout, &mut ctx.stdout).unwrap();
+        }
+
         let _ = child.wait();  // 자식 프로세스 종료 대기
     } else {
         println!("{}: command not found", cmd);
