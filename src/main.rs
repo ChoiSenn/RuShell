@@ -272,7 +272,7 @@ fn external_command(cmd: &str, args: &[&str], redirect: Option<Redirect>) {
 
         // 프로세스 생성. arg0은 명령어(프로그램명), 인수로 나머지 인수 그대로. spawn() 이용하여 프로세스 fork. 자식 프로세스에서 exec 수행.
         #[cfg(unix)]
-        let mut child = match ProcessCommand::new(path).arg0(cmd).args(args).spawn() {
+        let mut child = match command.spawn() {
             Ok(child) => child,  // child 핸들 반환
             Err(_) => {
                 println!("{}: command not found", cmd);
@@ -280,7 +280,7 @@ fn external_command(cmd: &str, args: &[&str], redirect: Option<Redirect>) {
             }
         };
         #[cfg(windows)]
-        let mut child = match ProcessCommand::new(path).arg(cmd).args(args).spawn() {
+        let mut child = match command.spawn() {
             Ok(child) => child,  // child 핸들 반환
             Err(_) => {
                 println!("{}: command not found", cmd);
