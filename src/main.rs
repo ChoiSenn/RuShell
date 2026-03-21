@@ -257,7 +257,7 @@ fn pwd_command(ctx: &mut ExecContext) {
     }
 }
 
-fn external_command(cmd: &str, args: &[&str], ctx: &mut ExecContext) {
+fn external_command(cmd: &str, args: &[&str], redirect: Option<Redirect>) {
     // 실행 가능하지 않다면 return
     if let Some(path) = find_in_path(cmd) {
         let mut command = ProcessCommand::new(&path);
