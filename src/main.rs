@@ -275,17 +275,7 @@ fn external_command(cmd: &str, args: &[&str], redirect: Option<Redirect>) {
         {
             command.arg0(cmd);
         }
-        let mut child = match command.spawn() {
-            Ok(child) => child,  // child 핸들 반환
-            Err(_) => {
-                println!("{}: command not found", cmd);
-                return;
-            }
-        };
-        #[cfg(windows)]
-        {
-            command.arg0(cmd);
-        }
+        
         let mut child = match command.spawn() {
             Ok(child) => child,  // child 핸들 반환
             Err(_) => {
