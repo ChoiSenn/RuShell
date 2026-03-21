@@ -19,7 +19,7 @@ struct ExecContext {
     stderr: Box<dyn Write>,
 }
 
-// 리다이렉트 대상 파일
+// 리다이렉트 대상 파일 경로 및 append 여부 (false: 덮어쓰기 / tru: 이어쓰기)
 #[derive(Clone)]
 struct Redirect {
     stdout: Option<(String, bool)>,
@@ -96,6 +96,17 @@ fn extract_redirect(tokens: Vec<String>) -> (Vec<String>, Option<Redirect>) {
                 } else {
                         eprintln!("syntax error: no file after 2>");
                         break;
+                }
+            }
+            // 표준 오류 추가
+            "2>>" => {
+                if i + 1 < tokens.len() {
+                    redirect.stderr = Some((tokens[i + 1].clone(), true)); // append
+                    has_redirect = true;
+                    i += 2;
+                } else {
+                    eprintln!("syntax error: no file after 2>>");
+                    break;
                 }
             }
             // 일반 토큰일 시, args에 추가
