@@ -212,7 +212,7 @@ fn main() {
             Some(Command::Echo) => echo_command(&args, &mut ctx),  // 인자 출력
             Some(Command::Pwd) => pwd_command(&mut ctx),  // 현재 디렉터리명 출력
             Some(Command::Cd) => cd_command(&args),  // 현재 디렉터리 이동
-            None => external_command(command, &args, &mut ctx)  // 내장 명령어가 아닌 경우, 외부 프로그램 실행 및 인수 전달
+            None => external_command(command, &args, redirect)  // 내장 명령어가 아닌 경우, 외부 프로그램 실행 및 인수 전달
         }
     }
 }
