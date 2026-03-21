@@ -21,7 +21,8 @@ struct ExecContext {
 // 리다이렉트 대상 파일
 #[derive(Clone)]
 struct Redirect {
-    file: String,
+    stdout: Option<String>,
+    stderr: Option<String>,
 }
 
 // 사용 가능한 문자열 목록
@@ -52,47 +53,70 @@ impl Command {
 // 인자 및 리다이렉션 분리
 fn extract_redirect(tokens: Vec<String>) -> (Vec<String>, Option<Redirect>) {
     let mut args = Vec::new();
-    let mut redirect = None;
+    let mut redirect = Redirect {
+        stdout: None,
+        stderr: None,
+    };
+
+    let mut has_redirect = false;
 
     let mut i = 0;
     while i < tokens.len() {
         // 토큰을 순회하며 리다이렉트 문구가 있는지 확인
         match tokens[i].as_str() {
-                ">" | "1>" => {  // stdout 리다이렉트 처리
-                        if i + 1 < tokens.len() {  // 다음 토큰에서 파일명 확인
-                            redirect = Some(Redirect {
-                                file: tokens[i + 1].clone(),
-                            });
-                            i += 2;
-                    } else {
-                        eprintln!("syntax error: no file after >");
+            // stdout 리다이렉트 처리 
+            ">" | "1>" => {  
+                if i + 1 < tokens.len() {  // 다음 토큰에서 파일명 확인
+                    redirect.stdout = Some(tokens[i + 1].clone());
+                    has_redirect = true;
+                    i += 2;
+                } else {
+                    eprintln!("syntax error: no file after >");
+                    break;
+                }
+            }
+            // 표준 오류 처리
+            "2>" => {
+                if i + 1 < tokens.len() {
+                    redirect.stderr = Some(tokens[i + 1].clone());
+                    has_redirect = true;
+                    i += 2;
+                } else {
+                        eprintln!("syntax error: no file after 2>");
                         break;
-                    }
                 }
-                // 일반 토큰일 시, args에 추가
-                _ => {
-                    args.push(tokens[i].clone());
-                    i += 1;
-                }
+            }
+            // 일반 토큰일 시, args에 추가
+            _ => {
+                args.push(tokens[i].clone());
+                i += 1;
+            }
         }
     }
 
     // [인수 토큰들], Some(Redirect)
-    (args, redirect)
+    if has_redirect {
+        (args, Some(redirect))
+    } else {
+        (args, None)
+    }
 }
 
 // 실행 환경 build
 fn build_context(redirect: Option<Redirect>) -> ExecContext {
-    // 출력 대상 결정
-    let stdout: Box<dyn Write> = match redirect {
-        Some(r) => Box::new(File::create(r.file).unwrap()),  // redirect 존재 시, 파일 생성
-        None => Box::new(stdout()),  // 없으면 stdout() (출력)
-    };
+    let mut stdout: Box<dyn Write> = Box::new(stdout());
+    let mut stderr: Box<dyn Write> = Box::new(stderr());
 
-    ExecContext {
-        stdout,
-        stderr: Box::new(stderr()),
+    if let Some(r) = redirect {
+        if let Some(file) = r.stdout {
+            stdout = Box::new(File::create(file).unwrap());
+        }
+        if let Some(file) = r.stderr {
+            stderr = Box::new(File::create(file).unwrap());
+        }
     }
+
+    ExecContext { stdout, stderr }
 }
 
 fn parse_args(input: &str) -> Vec<String> {
@@ -264,10 +288,14 @@ fn external_command(cmd: &str, args: &[&str], redirect: Option<Redirect>) {
         let mut command = ProcessCommand::new(&path);
         command.args(args);
 
-        // stdout 연결
+        // stdout / stderr 연결
         if let Some(r) = redirect {
-            let file = File::create(r.file).unwrap();
-            command.stdout(Stdio::from(file));
+            if let Some(file) = r.stdout {
+                command.stdout(Stdio::from(File::create(file).unwrap()));
+            }
+            if let Some(file) = r.stderr {
+                command.stderr(Stdio::from(File::create(file).unwrap()));
+            }
         }
 
         // 프로세스 생성. arg0은 명령어(프로그램명), 인수로 나머지 인수 그대로. spawn() 이용하여 프로세스 fork. 자식 프로세스에서 exec 수행.
@@ -275,7 +303,7 @@ fn external_command(cmd: &str, args: &[&str], redirect: Option<Redirect>) {
         {
             command.arg0(cmd);
         }
-        
+
         let mut child = match command.spawn() {
             Ok(child) => child,  // child 핸들 반환
             Err(_) => {
