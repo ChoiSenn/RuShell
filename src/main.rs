@@ -3,11 +3,25 @@ use std::io::{self, Write};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
+use std::fs::File;
+use std::io::{Write, stdout, stderr};
+use std::process::Stdio;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
+
+// 명령 실행 환경 ()
+struct ExecContext {
+    stdout: Box<dyn Write>,
+    stderr: Box<dyn Write>,
+}
+
+// 리다이렉트 대상 파일
+struct Redirect {
+    file: String,
+}
 
 // 사용 가능한 문자열 목록
 #[derive(Debug)]
@@ -31,6 +45,52 @@ impl Command {
             "cd" => Some(Command::Cd),
             _ => None,
         }
+    }
+}
+
+// 인자 및 리다이렉션 분리
+fn extract_redirect(tokens: Vec<String>) -> (Vec<String>, Option<Redirect>) {
+    let mut args = Vec:new();
+    let mut redirect = None;
+
+    let mut i = 0;
+    while i < tokens.len() {
+        // 토큰을 순회하며 리다이렉트 문구가 있는지 확인
+        match tokens[i].as_str() {
+                ">" | "1>" => {  // stdout 리다이렉트 처리
+                        if i + 1 < tokens.len() {  // 다음 토큰에서 파일명 확인
+                            redirect = Some(Redirect {
+                                file: tokens[i + 1].clone(),
+                            });
+                            i += 2;
+                    } else {
+                        eprintln!("syntax error: no file after >");
+                        break;
+                    }
+                }
+                // 일반 토큰일 시, args에 추가
+                _ => {
+                    args.push(tokens[i].clone());
+                    i += 1;
+                }
+        }
+    }
+
+    // [인수 토큰들], Some(Redirect)
+    (args, redirect)
+}
+
+// 실행 환경 build
+fn build_context(redirect: Option<Redirect>) -> ExecContext {
+    // 출력 대상 결정
+    let stdout: Box<dyn Write> = match redirect {
+        Some(r) => Box::new(File::create(r.file).unwrap()),  // redirect 존재 시, 파일 생성
+        None => Box::new(stdout()),  // 없으면 stdout() (출력)
+    };
+
+    ExecContext {
+        stdout,
+        stedrr: Box::new(stderr()),
     }
 }
 
@@ -132,17 +192,27 @@ fn main() {
             continue;
         }
 
+        // 리다이렉트 여부 확인
+        let (tokens, redirect) = extract_redirect(tokens);
+
+        if tokens.is_empty() {
+            continue;
+        }
+
         let command = &tokens[0];
         let args: Vec<&str> = tokens[1..].iter().map(|s| s.as_str()).collect();
+
+        // context 생성
+        let mut ctx = build_context(redirect);
 
         // 입력 명령어에 따른 동작
         match Command::from_str(command) {
             Some(Command::Exit) => break,  // shell 종료
-            Some(Command::Type) => type_command(&args),  // 내장 명령어/실행 파일/인식되지 않은 명령어인지 확인
-            Some(Command::Echo) => echo_command(&args),  // 인자 출력
-            Some(Command::Pwd) => pwd_command(),  // 현재 디렉터리명 출력
+            Some(Command::Type) => type_command(&args, &mut ctx),  // 내장 명령어/실행 파일/인식되지 않은 명령어인지 확인
+            Some(Command::Echo) => echo_command(&args, &mut ctx),  // 인자 출력
+            Some(Command::Pwd) => pwd_command(, &mut ctx),  // 현재 디렉터리명 출력
             Some(Command::Cd) => cd_command(&args),  // 현재 디렉터리 이동
-            None => external_command(command, &args)  // 내장 명령어가 아닌 경우, 외부 프로그램 실행 및 인수 전달
+            None => external_command(command, &args, &mut ctx)  // 내장 명령어가 아닌 경우, 외부 프로그램 실행 및 인수 전달
         }
     }
 }
@@ -180,16 +250,22 @@ fn cd_command(args: &[&str]) {
     }
 }
 
-fn pwd_command() {
+fn pwd_command(ctx: &mut ExecContext) {
     match env::current_dir() {
-        Ok(path) => println!("{}", path.display()),
-        Err(_e) => println!("Can't found path"),
+        Ok(path) => writeln!(ctx.stdout, "{}", path.display()).unwrap(),
+        Err(_) => writeln!(ctx.stdout, "Can't found path").unwrap(),
     }
 }
 
-fn external_command(cmd: &str, args: &[&str]) {
+fn external_command(cmd: &str, args: &[&str], ctx: &mut ExecContext) {
     // 실행 가능하지 않다면 return
     if let Some(path) = find_in_path(cmd) {
+        let mut command = ProcessCommand::new(path);
+        command.args(args);
+
+        // stdout 연결
+        command.stdout(Stdio::piped());
+
         // 프로세스 생성. arg0은 명령어(프로그램명), 인수로 나머지 인수 그대로. spawn() 이용하여 프로세스 fork. 자식 프로세스에서 exec 수행.
         #[cfg(unix)]
         let mut child = match ProcessCommand::new(path).arg0(cmd).args(args).spawn() {
@@ -213,21 +289,21 @@ fn external_command(cmd: &str, args: &[&str]) {
     }
 }
 
-fn type_command(args: &[&str]) {
+fn type_command(args: &[&str], ctx: &mut ExecContext) {
     if let Some(cmd) = args.first() {
         // 내장 명령일 경우, 보고하고 중지
         if Command::from_str(cmd).is_some() {
-            println!("{} is a shell builtin", cmd);
+            writeln!(ctx.stdout, "{} is a shell builtin", cmd).unwrap();
         } else if let Some(path) = find_in_path(cmd) {  // 내장 명령어가 아닌 경우, PATH를 참조하여 파일 전체 경로 반환
-            println!("{} is {}", cmd, path.display());
+            writeln!(ctx.stdout, "{} is {}", cmd, path.display()).unwrap();
         } else {
-            println!("{}: not found", cmd);
+            writeln!(ctx.stdout, "{}: not found", cmd).unwrap();
         }
     }
 }
 
-fn echo_command(args: &[&str]) {
-    println!("{}", args.join(" "));
+fn echo_command(args: &[&str], ctx: &mut ExecContext) {
+    writeln!(ctx.stdout, "{}", args.join(" ")).unwrap();
 }
 
 fn find_in_path(cmd:&str) -> Option<PathBuf> {
