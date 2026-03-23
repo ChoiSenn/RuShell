@@ -7,11 +7,103 @@ use std::fs::File;
 use std::io::{stdout, stderr};
 use std::process::Stdio;
 use std::fs::OpenOptions;
+use rustyline::completion::{Completer, Pair};
+use rustyline::Context;
+use rustyline::Result as RLResult;
+use rustyline::history::DefaultHistory;
+use rustyline::Editor;
+use rustyline::error::ReadlineError;
+use rustyline::Helper;
+use rustyline::hint::Hinter;
+use rustyline::highlight::Highlighter;
+use rustyline::validate::Validator;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
+
+struct ShellHelper;
+
+impl Helper for ShellHelper {}
+
+impl Hinter for ShellHelper {
+    type Hint = String;
+}
+
+impl Highlighter for ShellHelper {}
+
+impl Validator for ShellHelper {}
+
+impl Completer for ShellHelper {
+    type Candidate = Pair;
+
+    fn complete(
+        &self,
+        line: &str,
+        pos: usize,
+        _ctx: &Context<'_>,
+    ) -> RLResult<(usize, Vec<Pair>)> {
+        let input = &line[..pos];
+        let tokens: Vec<&str> = input.split_whitespace().collect();
+
+        let mut candidates = Vec::new();
+
+        if tokens.len() <= 1 {
+            let prefix = tokens.get(0).unwrap_or(&"");
+
+            let builtins = ["cd", "pwd", "echo", "exit", "type"];
+
+            for cmd in builtins {
+                if cmd.starts_with(prefix) {
+                    candidates.push(Pair {
+                        display: cmd.to_string(),
+                        replacement: cmd.to_string(),
+                    });
+                }
+            }
+
+            if let Some(path_var) = std::env::var_os("PATH") {
+                for dir in std::env::split_paths(&path_var) {
+                    if let Ok(entries) = std::fs::read_dir(dir) {
+                        for entry in entries.flatten() {
+                            let file_name = entry.file_name();
+                            let file_str = file_name.to_string_lossy();
+
+                            if file_str.starts_with(prefix) {
+                                candidates.push(Pair {
+                                    display: file_str.to_string(),
+                                    replacement: file_str.to_string(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            return Ok((0, candidates));
+        }
+
+        let last = tokens.last().unwrap_or(&"");
+
+        if let Ok(entries) = std::fs::read_dir(".") {
+            for entry in entries.flatten() {
+                let file_name = entry.file_name();
+                let file_str = file_name.to_string_lossy();
+
+                if file_str.starts_with(last) {
+                    candidates.push(Pair {
+                        display: file_str.to_string(),
+                        replacement: file_str.to_string(),
+                    });
+                }
+            }
+        }
+
+        let start = input.rfind(' ').map(|i| i + 1).unwrap_or(0);
+        Ok((start, candidates))
+    }
+}
 
 // 명령 실행 환경 ()
 struct ExecContext {
@@ -227,18 +319,29 @@ fn parse_args(input: &str) -> Vec<String> {
 }
 
 fn main() {
+    let mut rl = Editor::<ShellHelper, DefaultHistory>::new().unwrap();
+    rl.set_helper(Some(ShellHelper));
+
     // shell은 계속 반복되어야 하니까...
     // while true 하지 말고 loop를 쓰렴 더 짧으니까
     loop {
         // 프롬프트 시작
-        print!("$ ");
-        io::stdout().flush().unwrap();
+        let line = rl.readline("$ ");
 
-        // 입력 값 읽어와 저장 (command)
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
+        let input = match line {
+            Ok(line) => {
+                rl.add_history_entry(line.as_str()).unwrap();
+                line
+            }
+            Err(ReadlineError::Interrupted) => continue, // Ctrl-C
+            Err(ReadlineError::Eof) => break,            // Ctrl-D
+            Err(err) => {
+                eprintln!("Error: {:?}", err);
+                break;
+            }
+        };
+
         let input = input.trim();
-
         if input.is_empty() {
             continue;
         }
