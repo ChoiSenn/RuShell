@@ -73,7 +73,7 @@ impl Completer for ShellHelper {
                             if file_str.starts_with(prefix) {
                                 candidates.push(Pair {
                                     display: file_str.to_string(),
-                                    replacement: format!("{} ", cmd),
+                                    replacement: format!("{} ", file_str),
                                 });
                             }
                         }
@@ -94,7 +94,7 @@ impl Completer for ShellHelper {
                 if file_str.starts_with(last) {
                     candidates.push(Pair {
                         display: file_str.to_string(),
-                        replacement: format!("{} ", cmd),
+                        replacement: format!("{} ", candidates),
                     });
                 }
             }
