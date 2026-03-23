@@ -58,7 +58,7 @@ impl Completer for ShellHelper {
                 if cmd.starts_with(prefix) {
                     candidates.push(Pair {
                         display: cmd.to_string(),
-                        replacement: cmd.to_string(),
+                        replacement: format!("{} ", cmd),
                     });
                 }
             }
